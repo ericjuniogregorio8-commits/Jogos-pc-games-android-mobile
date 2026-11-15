@@ -1,0 +1,6 @@
+{
+  "name": "ZipPlay Arcade",
+  "description": "Arcade de jogos estilo PC e mobile no Android com suporte a toque e teclado, além de inspetor ZIP e APK.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

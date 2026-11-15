@@ -1,0 +1,24 @@
+<resources>
+    <string name="app_name">ZipPlay Arcade</string>
+    <string name="nav_arcade">Jogos</string>
+    <string name="nav_vault">ZIP &amp; APK</string>
+    <string name="nav_stats">Placar</string>
+    <string name="filter_all">Todos</string>
+    <string name="filter_favorites">Favoritos</string>
+    <string name="search_games_hint">Buscar jogo ou pacote…</string>
+    <string name="empty_favorites_title">Nenhum jogo favorito ainda</string>
+    <string name="empty_favorites_subtitle">Toque na estrela de qualquer jogo instalado para fixá-lo aqui.</string>
+    <string name="show_all_games">Ver todos os jogos</string>
+    <string name="play_now">Jogar</string>
+    <string name="inspect_package">Inspecionar</string>
+    <string name="hero_badge">ARCADE MOBILE • ZIP &amp; APK</string>
+    <string name="hero_title">Seus jogos mobile em um só lugar</string>
+    <string name="hero_subtitle">Jogue títulos nativos offline, favorite seus preferidos e inspecione pacotes .zip e .apk com segurança.</string>
+    <string name="nav_sites">Jogos Site</string>
+    <string name="sites_hero_badge">PORTAL WEB • JOGOS HTML5</string>
+    <string name="sites_hero_title">Sites de Jogos &amp; Arcade Web</string>
+    <string name="sites_hero_subtitle">Acesse portais online de jogos, abra qualquer URL segura ou jogue títulos HTML5 direto no navegador integrado.</string>
+    <string name="sites_url_hint">Digite um site de jogos (ex: poki.com)…</string>
+    <string name="open_site">Abrir Site</string>
+    <string name="play_web_game">Jogar Web</string>
+</resources>

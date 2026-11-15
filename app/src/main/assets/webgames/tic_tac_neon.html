@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Jogo da Velha IA</title>
+<style>
+  * { box-sizing: border-box; user-select: none; -webkit-user-select: none; }
+  html, body {
+    margin: 0; padding: 16px; width: 100%; height: 100%;
+    background: #070B16; color: #F2F6FF;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 16px;
+  }
+  .scores {
+    display: flex; gap: 10px; width: 100%; max-width: 340px;
+  }
+  .card {
+    flex: 1; background: #0E1526; border: 1px solid #28395E;
+    border-radius: 14px; padding: 10px; text-align: center;
+  }
+  .label { font-size: 11px; color: #A7B6D6; font-weight: 700; }
+  .num { font-size: 22px; font-weight: 800; margin-top: 2px; }
+  #status { font-size: 16px; font-weight: 700; color: #00E5FF; min-height: 24px; }
+  .board {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
+    width: 100%; max-width: 340px; aspect-ratio: 1;
+  }
+  .cell {
+    background: #0E1526; border: 2px solid #28395E; border-radius: 18px;
+    font-size: 46px; font-weight: 900; color: #F2F6FF;
+    display: flex; align-items: center; justify-content: center; cursor: pointer;
+    transition: transform 0.1s;
+  }
+  .cell:active { transform: scale(0.95); }
+  .cell.X { color: #00E5FF; border-color: rgba(0, 229, 255, 0.55); }
+  .cell.O { color: #FF4D8D; border-color: rgba(255, 77, 141, 0.55); }
+  .cell.win { background: rgba(16, 232, 154, 0.16); border-color: #10E89A; }
+  .actions { display: flex; gap: 10px; width: 100%; max-width: 340px; }
+  button {
+    flex: 1; border: none; border-radius: 14px; padding: 12px 16px;
+    font-size: 14px; font-weight: 800; cursor: pointer;
+  }
+  .primary { background: #00E5FF; color: #070B16; }
+  .secondary { background: #162038; color: #F2F6FF; border: 1px solid #28395E; }
+</style>
+</head>
+<body>
+  <div class="scores">
+    <div class="card"><div class="label">VOCÊ (X)</div><div id="sPlayer" class="num" style="color:#00E5FF">0</div></div>
+    <div class="card"><div class="label">EMPATES</div><div id="sDraw" class="num" style="color:#FFB300">0</div></div>
+    <div class="card"><div class="label">IA (O)</div><div id="sAi" class="num" style="color:#FF4D8D">0</div></div>
+  </div>
+  <div id="status">Sua vez! Toque em uma casa</div>
+  <div class="board" id="board"></div>
+  <div class="actions">
+    <button class="secondary" id="modeBtn">Modo: Difícil</button>
+    <button class="primary" id="resetBtn">Nova Partida</button>
+  </div>
+<script>
+const boardEl = document.getElementById('board');
+const statusEl = document.getElementById('status');
+const sPlayer = document.getElementById('sPlayer');
+const sDraw = document.getElementById('sDraw');
+const sAi = document.getElementById('sAi');
+const modeBtn = document.getElementById('modeBtn');
+const resetBtn = document.getElementById('resetBtn');
+
+let grid = Array(9).fill('');
+let locked = false, hardMode = true;
+let scores = { p: 0, d: 0, a: 0 };
+const wins = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+
+function checkWin(b) {
+  for (const line of wins) {
+    const [a, c, d] = line;
+    if (b[a] && b[a] === b[c] && b[a] === b[d]) return { winner: b[a], line };
+  }
+  if (b.every(v => v !== '')) return { winner: 'DRAW', line: [] };
+  return null;
+}
+
+function minimax(b, isMax) {
+  const res = checkWin(b);
+  if (res) return res.winner === 'O' ? 10 : res.winner === 'X' ? -10 : 0;
+  let best = isMax ? -99 : 99;
+  for (let i = 0; i < 9; i++) {
+    if (!b[i]) {
+      b[i] = isMax ? 'O' : 'X';
+      const val = minimax(b, !isMax);
+      b[i] = '';
+      best = isMax ? Math.max(best, val) : Math.min(best, val);
+    }
+  }
+  return best;
+}
+
+function aiMove() {
+  const empty = grid.map((v, i) => v === '' ? i : -1).filter(i => i >= 0);
+  if (empty.length === 0) return;
+  let move = empty[Math.floor(Math.random() * empty.length)];
+  if (hardMode) {
+    let bestScore = -99;
+    for (const i of empty) {
+      grid[i] = 'O';
+      const sc = minimax(grid, false);
+      grid[i] = '';
+      if (sc > bestScore) { bestScore = sc; move = i; }
+    }
+  }
+  grid[move] = 'O';
+  render();
+  const res = checkWin(grid);
+  if (res) finish(res);
+  else { locked = false; statusEl.textContent = 'Sua vez! Toque em uma casa'; }
+}
+
+function finish(res) {
+  locked = true;
+  if (res.winner === 'X') {
+    scores.p++; sPlayer.textContent = scores.p;
+    statusEl.textContent = 'Você venceu!';
+    if (window.ZipPlayBridge && typeof window.ZipPlayBridge.reportScore === 'function') {
+      window.ZipPlayBridge.reportScore('Jogo da Velha IA', scores.p * 100);
+    }
+  } else if (res.winner === 'O') {
+    scores.a++; sAi.textContent = scores.a;
+    statusEl.textContent = 'IA venceu desta vez!';
+  } else {
+    scores.d++; sDraw.textContent = scores.d;
+    statusEl.textContent = 'Empate estratégico!';
+  }
+  render(res.line);
+}
+
+function render(winLine = []) {
+  boardEl.innerHTML = '';
+  grid.forEach((v, idx) => {
+    const btn = document.createElement('button');
+    btn.className = 'cell ' + v + (winLine.includes(idx) ? ' win' : '');
+    btn.textContent = v;
+    btn.onclick = () => {
+      if (locked || grid[idx]) return;
+      grid[idx] = 'X';
+      locked = true;
+      render();
+      const res = checkWin(grid);
+      if (res) { finish(res); return; }
+      statusEl.textContent = 'IA pensando…';
+      setTimeout(aiMove, 260);
+    };
+    boardEl.appendChild(btn);
+  });
+}
+
+function reset() {
+  grid = Array(9).fill('');
+  locked = false;
+  statusEl.textContent = 'Sua vez! Toque em uma casa';
+  render();
+}
+
+modeBtn.onclick = () => {
+  hardMode = !hardMode;
+  modeBtn.textContent = hardMode ? 'Modo: Difícil' : 'Modo: Normal';
+  reset();
+};
+resetBtn.onclick = reset;
+render();
+</script>
+</body>
+</html>

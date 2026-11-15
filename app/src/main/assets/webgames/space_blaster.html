@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Space Blaster Web</title>
+<style>
+  * { box-sizing: border-box; user-select: none; -webkit-user-select: none; touch-action: none; }
+  html, body {
+    margin: 0; padding: 0; width: 100%; height: 100%;
+    background: #070B16; color: #F2F6FF;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    overflow: hidden;
+  }
+  canvas { display: block; width: 100%; height: 100%; }
+  #hud {
+    position: fixed; top: 12px; left: 12px; right: 12px;
+    display: flex; justify-content: space-between; align-items: center;
+    pointer-events: none; z-index: 5;
+  }
+  .pill {
+    background: rgba(14, 21, 38, 0.92);
+    border: 1px solid #28395E;
+    border-radius: 14px; padding: 8px 14px;
+    font-size: 13px; font-weight: 700;
+  }
+  .cyan { color: #00E5FF; }
+  .amber { color: #FFB300; }
+  #overlay {
+    position: fixed; inset: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: rgba(7, 11, 22, 0.84);
+    z-index: 10; text-align: center; padding: 24px;
+  }
+  #overlay.hidden { display: none; }
+  h1 { margin: 0 0 8px; font-size: 28px; color: #00E5FF; letter-spacing: 0.5px; }
+  p { margin: 0 0 20px; font-size: 14px; color: #A7B6D6; max-width: 300px; line-height: 1.5; }
+  button {
+    background: #00E5FF; color: #070B16; border: none;
+    border-radius: 16px; padding: 14px 28px;
+    font-size: 16px; font-weight: 800; cursor: pointer;
+    box-shadow: 0 0 24px rgba(0, 229, 255, 0.35);
+  }
+  button:active { transform: scale(0.96); }
+</style>
+</head>
+<body>
+<div id="hud">
+  <div class="pill">PONTOS: <span id="scoreVal" class="cyan">0</span></div>
+  <div class="pill">ONDA <span id="waveVal" class="amber">1</span> • VIDAS: <span id="livesVal">3</span></div>
+</div>
+<canvas id="game"></canvas>
+<div id="overlay">
+  <h1 id="overTitle">SPACE BLASTER WEB</h1>
+  <p id="overDesc">Arraste com o dedo ou use as setas para mover a nave. Os disparos são automáticos!</p>
+  <button id="startBtn">INICIAR MISSÃO</button>
+</div>
+<script>
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const overlay = document.getElementById('overlay');
+const overTitle = document.getElementById('overTitle');
+const overDesc = document.getElementById('overDesc');
+const startBtn = document.getElementById('startBtn');
+const scoreVal = document.getElementById('scoreVal');
+const waveVal = document.getElementById('waveVal');
+const livesVal = document.getElementById('livesVal');
+
+let W = 0, H = 0, dpr = 1;
+function resize() {
+  dpr = Math.min(window.devicePixelRatio || 1, 2);
+  W = window.innerWidth; H = window.innerHeight;
+  canvas.width = W * dpr; canvas.height = H * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+window.addEventListener('resize', resize);
+resize();
+
+let running = false, score = 0, lives = 3, wave = 1;
+let player = { x: W / 2, y: H - 90, targetX: W / 2, r: 18 };
+let bullets = [], enemies = [], particles = [], stars = [];
+let lastShot = 0, spawnTimer = 0, keys = {};
+
+for (let i = 0; i < 65; i++) {
+  stars.push({ x: Math.random() * 1000, y: Math.random() * 1000, s: Math.random() * 2 + 0.5, v: Math.random() * 1.2 + 0.4 });
+}
+
+function resetGame() {
+  score = 0; lives = 3; wave = 1;
+  player = { x: W / 2, y: Math.max(120, H - 90), targetX: W / 2, r: 18 };
+  bullets = []; enemies = []; particles = [];
+  scoreVal.textContent = '0';
+  waveVal.textContent = '1';
+  livesVal.textContent = '3';
+}
+
+function startGame() {
+  resetGame();
+  running = true;
+  overlay.classList.add('hidden');
+}
+
+startBtn.addEventListener('click', startGame);
+
+canvas.addEventListener('pointerdown', (e) => { player.targetX = e.clientX; });
+canvas.addEventListener('pointermove', (e) => { if (e.buttons > 0 || e.pointerType === 'touch') player.targetX = e.clientX; });
+window.addEventListener('keydown', (e) => { keys[e.key] = true; });
+window.addEventListener('keyup', (e) => { keys[e.key] = false; });
+
+function explode(x, y, color, count = 14) {
+  for (let i = 0; i < count; i++) {
+    const a = Math.random() * Math.PI * 2;
+    const sp = Math.random() * 4 + 1;
+    particles.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 1, color });
+  }
+}
+
+function endGame() {
+  running = false;
+  if (window.ZipPlayBridge && typeof window.ZipPlayBridge.reportScore === 'function') {
+    window.ZipPlayBridge.reportScore('Space Blaster Web', score);
+  }
+  overTitle.textContent = 'FIM DE JOGO';
+  overDesc.textContent = `Você alcançou ${score} pontos na Onda ${wave}. Pronto para bater o recorde?`;
+  startBtn.textContent = 'JOGAR NOVAMENTE';
+  overlay.classList.remove('hidden');
+}
+
+let lastTime = performance.now();
+function loop(now) {
+  const dt = Math.min((now - lastTime) / 16.67, 2.5);
+  lastTime = now;
+
+  ctx.fillStyle = '#070B16';
+  ctx.fillRect(0, 0, W, H);
+
+  for (const st of stars) {
+    st.y += st.v * dt * (running ? 1.6 : 0.4);
+    if (st.y > H) { st.y = -4; st.x = Math.random() * W; }
+    ctx.fillStyle = 'rgba(167, 182, 214, 0.45)';
+    ctx.fillRect(st.x % W, st.y, st.s, st.s);
+  }
+
+  if (running) {
+    if (keys['ArrowLeft'] || keys['a'] || keys['A']) player.targetX -= 8 * dt;
+    if (keys['ArrowRight'] || keys['d'] || keys['D']) player.targetX += 8 * dt;
+    player.targetX = Math.max(24, Math.min(W - 24, player.targetX));
+    player.x += (player.targetX - player.x) * 0.25 * dt;
+    player.y = Math.max(120, H - 90);
+
+    if (now - lastShot > 180) {
+      bullets.push({ x: player.x, y: player.y - 20, vy: -11 });
+      lastShot = now;
+    }
+
+    spawnTimer += dt;
+    const spawnRate = Math.max(18, 46 - wave * 3);
+    if (spawnTimer >= spawnRate) {
+      spawnTimer = 0;
+      const isFast = Math.random() < 0.28;
+      enemies.push({
+        x: 24 + Math.random() * (W - 48),
+        y: -24,
+        r: isFast ? 14 : 20,
+        vy: (isFast ? 4.2 : 2.4) + wave * 0.35,
+        hp: isFast ? 1 : 2,
+        color: isFast ? '#FF4D8D' : '#FFB300'
+      });
+    }
+
+    for (let i = bullets.length - 1; i >= 0; i--) {
+      const b = bullets[i];
+      b.y += b.vy * dt;
+      if (b.y < -20) { bullets.splice(i, 1); continue; }
+      ctx.fillStyle = '#00E5FF';
+      ctx.fillRect(b.x - 2.5, b.y - 8, 5, 16);
+    }
+
+    for (let i = enemies.length - 1; i >= 0; i--) {
+      const en = enemies[i];
+      en.y += en.vy * dt;
+      ctx.beginPath();
+      ctx.arc(en.x, en.y, en.r, 0, Math.PI * 2);
+      ctx.fillStyle = en.color + '33';
+      ctx.fill();
+      ctx.lineWidth = 2.5;
+      ctx.strokeStyle = en.color;
+      ctx.stroke();
+
+      let hit = false;
+      for (let j = bullets.length - 1; j >= 0; j--) {
+        const b = bullets[j];
+        if (Math.hypot(en.x - b.x, en.y - b.y) < en.r + 6) {
+          bullets.splice(j, 1);
+          en.hp--;
+          explode(b.x, b.y, en.color, 5);
+          if (en.hp <= 0) {
+            score += 25;
+            wave = 1 + Math.floor(score / 250);
+            scoreVal.textContent = score;
+            waveVal.textContent = wave;
+            explode(en.x, en.y, en.color, 16);
+            enemies.splice(i, 1);
+            hit = true;
+            break;
+          }
+        }
+      }
+      if (hit) continue;
+
+      if (Math.hypot(en.x - player.x, en.y - player.y) < en.r + player.r - 4 || en.y > H + 24) {
+        enemies.splice(i, 1);
+        lives--;
+        livesVal.textContent = Math.max(0, lives);
+        explode(player.x, player.y, '#FF5C70', 18);
+        if (lives <= 0) { endGame(); break; }
+      }
+    }
+
+    // Draw ship
+    ctx.save();
+    ctx.translate(player.x, player.y);
+    ctx.beginPath();
+    ctx.moveTo(0, -22);
+    ctx.lineTo(18, 16);
+    ctx.lineTo(0, 8);
+    ctx.lineTo(-18, 16);
+    ctx.closePath();
+    ctx.fillStyle = '#00E5FF';
+    ctx.fill();
+    ctx.restore();
+  }
+
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx * dt; p.y += p.vy * dt; p.life -= 0.03 * dt;
+    if (p.life <= 0) { particles.splice(i, 1); continue; }
+    ctx.globalAlpha = p.life;
+    ctx.fillStyle = p.color;
+    ctx.fillRect(p.x - 2, p.y - 2, 4, 4);
+    ctx.globalAlpha = 1;
+  }
+
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

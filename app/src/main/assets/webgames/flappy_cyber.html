@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Flappy Cyber Web</title>
+<style>
+  * { box-sizing: border-box; user-select: none; -webkit-user-select: none; touch-action: manipulation; }
+  html, body {
+    margin: 0; padding: 0; width: 100%; height: 100%;
+    background: #070B16; color: #F2F6FF;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    overflow: hidden;
+  }
+  canvas { display: block; width: 100%; height: 100%; }
+  #hud {
+    position: fixed; top: 14px; left: 16px; right: 16px;
+    display: flex; justify-content: space-between; pointer-events: none; z-index: 5;
+  }
+  .pill {
+    background: rgba(14, 21, 38, 0.85); border: 1px solid #28395E;
+    border-radius: 14px; padding: 8px 14px; font-size: 13px; font-weight: 700;
+  }
+  #overlay {
+    position: fixed; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    background: rgba(7, 11, 22, 0.82); z-index: 10; text-align: center; padding: 24px;
+  }
+  #overlay.hidden { display: none; }
+  h1 { margin: 0 0 8px; font-size: 28px; color: #FFB300; }
+  p { margin: 0 0 20px; font-size: 14px; color: #A7B6D6; max-width: 280px; line-height: 1.5; }
+  button {
+    background: #FFB300; color: #070B16; border: none; border-radius: 16px;
+    padding: 14px 28px; font-size: 16px; font-weight: 800; cursor: pointer;
+  }
+</style>
+</head>
+<body>
+<div id="hud">
+  <div class="pill">PONTOS: <span id="scoreVal" style="color:#FFB300">0</span></div>
+  <div class="pill">RECORDE: <span id="bestVal" style="color:#10E89A">0</span></div>
+</div>
+<canvas id="game"></canvas>
+<div id="overlay">
+  <h1 id="overTitle">FLAPPY CYBER WEB</h1>
+  <p id="overDesc">Toque na tela ou pressione Espaço para impulsionar o drone pelos portais neon.</p>
+  <button id="startBtn">DECOLAR</button>
+</div>
+<script>
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const overlay = document.getElementById('overlay');
+const overTitle = document.getElementById('overTitle');
+const overDesc = document.getElementById('overDesc');
+const startBtn = document.getElementById('startBtn');
+const scoreVal = document.getElementById('scoreVal');
+const bestVal = document.getElementById('bestVal');
+
+let W = 0, H = 0, dpr = 1;
+function resize() {
+  dpr = Math.min(window.devicePixelRatio || 1, 2);
+  W = window.innerWidth; H = window.innerHeight;
+  canvas.width = W * dpr; canvas.height = H * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+window.addEventListener('resize', resize);
+resize();
+
+let running = false, score = 0, best = 0;
+let bird = { x: 90, y: H / 2, vy: 0, r: 15 };
+let pipes = [], spawnDist = 0;
+
+function startGame() {
+  score = 0;
+  bird = { x: Math.min(110, W * 0.25), y: H / 2, vy: -5.5, r: 15 };
+  pipes = [];
+  spawnDist = 140;
+  scoreVal.textContent = '0';
+  running = true;
+  overlay.classList.add('hidden');
+}
+
+function flap() {
+  if (!running) return;
+  bird.vy = -7.6;
+}
+
+startBtn.addEventListener('click', startGame);
+canvas.addEventListener('pointerdown', flap);
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'Space' || e.code === 'ArrowUp') {
+    if (!running) startGame(); else flap();
+  }
+});
+
+function gameOver() {
+  running = false;
+  if (score > best) { best = score; bestVal.textContent = best; }
+  if (window.ZipPlayBridge && typeof window.ZipPlayBridge.reportScore === 'function') {
+    window.ZipPlayBridge.reportScore('Flappy Cyber Web', score * 10);
+  }
+  overTitle.textContent = 'COLISÃO DETECTADA';
+  overDesc.textContent = `Você atravessou ${score} portais cyber. Tente superar ${best}!`;
+  startBtn.textContent = 'TENTAR DE NOVO';
+  overlay.classList.remove('hidden');
+}
+
+let lastTime = performance.now();
+function loop(now) {
+  const dt = Math.min((now - lastTime) / 16.67, 2.2);
+  lastTime = now;
+
+  ctx.fillStyle = '#070B16';
+  ctx.fillRect(0, 0, W, H);
+
+  // Subtle grid background
+  ctx.strokeStyle = 'rgba(40, 57, 94, 0.25)';
+  ctx.lineWidth = 1;
+  for (let x = 0; x < W; x += 44) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
+  for (let y = 0; y < H; y += 44) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+
+  if (running) {
+    bird.vy += 0.36 * dt;
+    bird.y += bird.vy * dt;
+
+    spawnDist += 3.2 * dt;
+    if (spawnDist >= 220) {
+      spawnDist = 0;
+      const gap = Math.max(135, 175 - score * 1.5);
+      const topH = 80 + Math.random() * Math.max(80, H - gap - 180);
+      pipes.push({ x: W + 40, w: 54, top: topH, gap, passed: false });
+    }
+
+    for (let i = pipes.length - 1; i >= 0; i--) {
+      const p = pipes[i];
+      p.x -= 3.2 * dt;
+      ctx.fillStyle = '#0E1526';
+      ctx.strokeStyle = '#00E5FF';
+      ctx.lineWidth = 2.5;
+      ctx.fillRect(p.x, 0, p.w, p.top);
+      ctx.strokeRect(p.x, -2, p.w, p.top + 2);
+      const botY = p.top + p.gap;
+      ctx.fillRect(p.x, botY, p.w, H - botY);
+      ctx.strokeRect(p.x, botY, p.w, H - botY + 2);
+
+      if (!p.passed && p.x + p.w < bird.x) {
+        p.passed = true;
+        score++;
+        scoreVal.textContent = score;
+        if (score > best) { best = score; bestVal.textContent = best; }
+      }
+
+      if (bird.x + bird.r > p.x && bird.x - bird.r < p.x + p.w) {
+        if (bird.y - bird.r < p.top || bird.y + bird.r > botY) {
+          gameOver(); break;
+        }
+      }
+
+      if (p.x + p.w < -20) pipes.splice(i, 1);
+    }
+
+    if (bird.y - bird.r < 0 || bird.y + bird.r > H) gameOver();
+  }
+
+  // Draw drone
+  ctx.beginPath();
+  ctx.arc(bird.x, bird.y, bird.r, 0, Math.PI * 2);
+  ctx.fillStyle = '#FFB300';
+  ctx.fill();
+  ctx.strokeStyle = '#FFF';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
